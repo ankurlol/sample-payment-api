@@ -1,9 +1,9 @@
-﻿import os
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import json
 
 # Change this to "v2.0.0-broken" to simulate a bad release
-VERSION = os.getenv("APP_VERSION", "v1.0.0-stable")
+VERSION = os.getenv("APP_VERSION", "v2.0.0-broken")
 
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
