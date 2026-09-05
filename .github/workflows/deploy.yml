@@ -43,24 +43,27 @@ jobs:
       - name: Simulated Deployment & Health Verification
         run: |
           echo "=========================================="
-          echo "🚀 Deploying commit: ${{ steps.target.outputs.TARGET_SHA }}"
+          echo "🚀 Deploying target commit: ${{ steps.target.outputs.TARGET_SHA }}"
           echo "📦 Deployment Type: ${{ steps.target.outputs.DEPLOY_TYPE }}"
           echo "=========================================="
           
-          # Start app in background
-          python app.py &
+          # Start app in background unbuffered
+          python -u app.py > app.log 2>&1 &
           PID=$!
-          sleep 2
           
-          # Run Healthcheck
-          echo "🔍 Running Healthcheck on /healthz..."
-          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthz)
+          echo "Waiting for service to bind port 3000..."
+          for i in {1..10}; do
+            if curl -s http://127.0.0.1:3000/healthz > /dev/null; then
+              echo "✅ Health check PASSED (HTTP 200). Service healthy!"
+              cat app.log
+              kill $PID
+              exit 0
+            fi
+            echo "Attempt $i: waiting for service..."
+            sleep 1
+          done
           
-          if [ "$RESPONSE" -eq 200 ]; then
-            echo "✅ Health check PASSED (HTTP 200). Service successfully live."
-            kill $PID
-          else
-            echo "❌ Health check FAILED with HTTP $RESPONSE"
-            kill $PID
-            exit 1
-          fi
+          echo "❌ Health check failed to respond in time. Application logs:"
+          cat app.log
+          kill $PID
+          exit 1
