@@ -1,0 +1,66 @@
+﻿name: Deploy Service & Auto-Rollback
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      rollback_sha:
+        description: "Git Commit SHA to rollback and deploy"
+        required: true
+        default: ""
+      reason:
+        description: "Reason for rollback"
+        required: false
+        default: "Autonomous SRE Rollback"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Target Commit SHA
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.rollback_sha }}" ]; then
+            echo "TARGET_SHA=${{ github.event.inputs.rollback_sha }}" >> $GITHUB_OUTPUT
+            echo "DEPLOY_TYPE=ROLLBACK" >> $GITHUB_OUTPUT
+            echo "Reason: ${{ github.event.inputs.reason }}"
+          else
+            echo "TARGET_SHA=${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "DEPLOY_TYPE=STANDARD_DEPLOY" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.target.outputs.TARGET_SHA }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Simulated Deployment & Health Verification
+        run: |
+          echo "=========================================="
+          echo "🚀 Deploying commit: ${{ steps.target.outputs.TARGET_SHA }}"
+          echo "📦 Deployment Type: ${{ steps.target.outputs.DEPLOY_TYPE }}"
+          echo "=========================================="
+          
+          # Start app in background
+          python app.py &
+          PID=$!
+          sleep 2
+          
+          # Run Healthcheck
+          echo "🔍 Running Healthcheck on /healthz..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/healthz)
+          
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ Health check PASSED (HTTP 200). Service successfully live."
+            kill $PID
+          else
+            echo "❌ Health check FAILED with HTTP $RESPONSE"
+            kill $PID
+            exit 1
+          fi
