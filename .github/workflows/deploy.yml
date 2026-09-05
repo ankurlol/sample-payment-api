@@ -33,7 +33,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.target.outputs.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Switch to Target Commit
+        run: |
+          echo "Checking out target commit: ${{ steps.target.outputs.TARGET_SHA }}"
+          git checkout ${{ steps.target.outputs.TARGET_SHA }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,11 +52,10 @@ jobs:
           echo "📦 Deployment Type: ${{ steps.target.outputs.DEPLOY_TYPE }}"
           echo "=========================================="
           
-          # Start app in background unbuffered
           python -u app.py > app.log 2>&1 &
           PID=$!
           
-          echo "Waiting for service to bind port 3000..."
+          echo "Waiting for service on port 3000..."
           for i in {1..10}; do
             if curl -s http://127.0.0.1:3000/healthz > /dev/null; then
               echo "✅ Health check PASSED (HTTP 200). Service healthy!"
